@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
 st.set_page_config(page_title="METU-IE Summer Practice Assistant", page_icon="🎓", layout="centered")
 
@@ -44,7 +44,7 @@ say so and direct the user to sp-ie.metu.edu.tr or the SP Committee email: ie-st
 1. Login to ocw.metu.edu.tr with student account.
 2. Find "IE300/400 Summer Internship" under "My courses".
 3. Click "SGK Insurance Application" questionnaire; fill identity + company info; click Submit.
-4. Upload "Declaration Form for students with/without family health insurance" (found on sp-ie.metu.edu.tr/en/forms).
+4. Upload "Declaration Form for students with/without family health insurance" (sp-ie.metu.edu.tr/en/forms).
 5. Done. No confirmation email is sent - this is normal.
 
 === MISTAKES / CANCELLATIONS ===
@@ -60,8 +60,7 @@ say so and direct the user to sp-ie.metu.edu.tr or the SP Committee email: ie-st
 - Foreign students NOT allowed to do voluntary internships in Turkey.
 
 === PAID SUMMER PRACTICES ===
-(Only for private companies in Turkey where payment was received)
-After finishing SP and receiving all payments:
+After finishing SP and receiving all payments (private company, Turkey only):
 1. Login to ocw.metu.edu.tr
 2. Fill "Paid SP form questionnaire" under IE300/400 course.
 3. Download, print, sign the Paid Summer Practice Form; upload scanned PDF to OCW.
@@ -88,7 +87,7 @@ AFTER:
 
 === PAPERWORK / DOCUMENTS ===
 1. Add IE300/IE400 in course registration at semester start.
-2. Submit SP report to Students Affairs Secretary (IE 128) within first 2 weeks of following term + soft copy via website.
+2. Submit SP report to Students Affairs Secretary (IE 128) within first 2 weeks + soft copy via website.
 3. Company sends Evaluation Form + Employer Survey to IE 128 or sp-belge@metu.edu.tr
 4. Fill the online questionnaire (announced separately).
 All forms: sp-ie.metu.edu.tr/en/forms
@@ -120,16 +119,17 @@ def ask_gemini(history):
     api_key = st.secrets.get("GEMINI_API_KEY", "")
     if not api_key:
         return None
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        system_instruction=KNOWLEDGE_BASE,
-    )
-    gemini_history = []
+    client = genai.Client(api_key=api_key)
+    # Build contents list
+    contents = []
     for msg in history:
         role = "user" if msg["role"] == "user" else "model"
-        gemini_history.append({"role": role, "parts": [msg["content"]]})
-    response = model.generate_content(gemini_history)
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=contents,
+        config={"system_instruction": KNOWLEDGE_BASE},
+    )
     return response.text
 
 st.markdown('<div class="badge">🎓 METU Industrial Engineering</div>', unsafe_allow_html=True)
@@ -164,12 +164,12 @@ if prompt := st.chat_input("Ask about METU-IE Summer Practice..."):
             st.error("GEMINI_API_KEY is not set in Streamlit secrets.")
         else:
             with st.spinner("Thinking..."):
-                answer = ask_gemini(st.session_state.messages)
-            if answer:
-                st.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            else:
-                st.error("No response received.")
+                try:
+                    answer = ask_gemini(st.session_state.messages)
+                    st.markdown(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
 st.divider()
 st.caption("📌 Official website: [sp-ie.metu.edu.tr/en](https://sp-ie.metu.edu.tr/en) | ✉️ ie-staj@metu.edu.tr")
