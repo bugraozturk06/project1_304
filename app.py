@@ -1,5 +1,5 @@
 import streamlit as st
-from google import genai
+from groq import Groq
 
 st.set_page_config(page_title="METU-IE Summer Practice Assistant", page_icon="🎓", layout="centered")
 
@@ -13,7 +13,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 </style>
 """, unsafe_allow_html=True)
 
-KNOWLEDGE_BASE = """
+SYSTEM_PROMPT = """
 You are a helpful assistant for METU Industrial Engineering (IE) Summer Practice (Staj) procedures.
 Answer questions ONLY based on the information below. If a question is outside this scope, politely
 say so and direct the user to sp-ie.metu.edu.tr or the SP Committee email: ie-staj@metu.edu.tr
@@ -115,22 +115,20 @@ A: Yes - find analogies. Budget = production plan, records = inventory, timetabl
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-def ask_gemini(history):
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
+def ask_groq(history):
+    api_key = st.secrets.get("GROQ_API_KEY", "")
     if not api_key:
         return None
-    client = genai.Client(api_key=api_key)
-    # Build contents list
-    contents = []
+    client = Groq(api_key=api_key)
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for msg in history:
-        role = "user" if msg["role"] == "user" else "model"
-        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=contents,
-        config={"system_instruction": KNOWLEDGE_BASE},
+        messages.append({"role": msg["role"], "content": msg["content"]})
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=messages,
+        max_tokens=1024,
     )
-    return response.text
+    return response.choices[0].message.content
 
 st.markdown('<div class="badge">🎓 METU Industrial Engineering</div>', unsafe_allow_html=True)
 st.markdown('<p class="main-title">Summer Practice Assistant</p>', unsafe_allow_html=True)
@@ -160,12 +158,12 @@ if prompt := st.chat_input("Ask about METU-IE Summer Practice..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        if not st.secrets.get("GEMINI_API_KEY", ""):
-            st.error("GEMINI_API_KEY is not set in Streamlit secrets.")
+        if not st.secrets.get("GROQ_API_KEY", ""):
+            st.error("GROQ_API_KEY is not set in Streamlit secrets.")
         else:
             with st.spinner("Thinking..."):
                 try:
-                    answer = ask_gemini(st.session_state.messages)
+                    answer = ask_groq(st.session_state.messages)
                     st.markdown(answer)
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 except Exception as e:
